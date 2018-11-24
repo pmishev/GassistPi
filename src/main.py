@@ -158,7 +158,8 @@ class Myassistant():
         self.assistant=None
         self.sensitivity = [0.5]*len(models)
         self.callbacks = [self.detected]*len(models)
-        self.detector = snowboydecoder.HotwordDetector(models, sensitivity=self.sensitivity)
+        # self.detector = snowboydecoder.HotwordDetector(models, sensitivity=self.sensitivity)
+        self.detector = snowboydecoder.HotwordDetector(models, sensitivity=[0.8, 0.80]) # TODO: change structure of hotwords array so sensitivity can be applied individually
         self.t1 = Thread(target=self.start_detector)
         self.t2 = Thread(target=self.pushbutton)
 
