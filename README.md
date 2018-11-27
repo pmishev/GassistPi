@@ -1,21 +1,21 @@
 
 
-# GassistPi -- Google Assistant for all Raspberry Pi Boards  
+# GassistPi -- Google Assistant for Single Board Computers    
 *******************************************************************************************************************************
 ### **If you like the work, find it useful and if you would like to get me a :coffee: :smile:** [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7GH3YDCHZ36QN)
 
 ### **Community: For Non-Issue Help and Interaction** [![Join the chat at https://gitter.im/publiclab/publiclab](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/GassistPi/Lobby/)
 *******************************************************************************************************************************
-## 12-Oct-2018 Update:
-**Use custom actions in your native or Non-english languages. Non-English languages supported: French, Italian, German, Spanish and Dutch.**          
+## 26-Nov-2018 Update:
+**GassistPi has been ported to work with Pi as well as other SBCs running Armbian Stretch.**          
 *******************************************************************************************************************************
 
-# Features (All features are applicable to all Pi boards, unless and otherwise mentioned):  
+# Features (All features are applicable to all boards, unless and otherwise mentioned):  
 **1.   Headless auto start on boot.**    
-**2.   Voice control of GPIOs without IFTTT, api.ai, Actions SDK.**   
+**2.   Voice control of GPIOs without IFTTT, api.ai, Actions SDK (Only for Raspberry Pi Boards).**   
 **3.   Voice control of NodeMCU without IFTTT and MQTT.**  
 **4.   Radio streaming.**  
-**5.   Voice control of servo connected to RPi GPIO.**  
+**5.   Voice control of servo connected to RPi GPIO (Only for Raspberry Pi Boards).**    
 **6.   Safe shutdown RPi using voice command.**  
 **7.   Stream Music from YouTube.**  
 **8.   Indicator lights for assistant listening and speaking events.**  
@@ -35,7 +35,7 @@
 **22.  Sending voice messages from the phone to the raspberry.**  
 **23.  Play your Spotify playlist.**  
 **24.  Custom wakeword activation for all Pi boards.**      
-**25.  Mute microphones to prevent listening to Ok-Google hotword.**  
+**25.  Mute microphones to prevent listening to Ok-Google hotword (Only Raspberry Pi Boards).**  
 **26.  Create custom conversations.**  
 **27.  Control of lights added to Domoticz.**  
 **28.  Stream music from Gaana.com.**  
@@ -43,10 +43,14 @@
 **30.  Custom actions in French, Italian, German, Dutch and Spanish.**    
 
 *******************************************************************************************************************************  
-**Google's AIY image has the environment in a different directory, which will not work with this project. So please use the Standard Raspbian Desktop/Lite image- [Link](https://www.raspberrypi.org/downloads/raspbian/)**  
+### Only OSes suported are:
+- Armbian Stretch    
+- Raspbian Stretch   
+
+**Raspberry Pi users please use the latest Raspbian Desktop/Lite image- [Link](https://www.raspberrypi.org/downloads/raspbian/). Other board users please use the lastest Armbian image- [Link](https://www.armbian.com/download/)**  
 *******************************************************************************************************************************
 
-## NOTE: "${USER}" will automatically take your username. No need to change that. Just copy pasting the following commands on terminal will work.  
+### NOTE: "${USER}" will automatically take your username. No need to change that. Just copy pasting the following commands on terminal will work.  
 
 *************************************************
 ## **FIRST STEP- CLONE the PROJECT on to Pi**   
@@ -61,11 +65,10 @@ git clone https://github.com/shivasiddharth/GassistPi
 *************************************************  
 ## **INSTALL AUDIO CONFIG FILES**
 *************************************************  
-1. Update OS and Kernel    
+1. Update OS     
 
 ```
-sudo apt-get update  
-sudo apt-get install raspberrypi-kernel  
+sudo apt-get update
 ```
 
 2. Restart Pi  and change directory
@@ -74,64 +77,65 @@ cd /home/${USER}/
 ```
 
 3. Choose the audio configuration according to your setup.   
-**The speaker-test command is used to initialize alsa, so please do not skip that.  
+**Non-Raspberry Pi users, choose the USB-DAC option.    
+The speaker-test command is used to initialize alsa, so please do not skip that.  
 AIY-HAT and CUSTOM-HAT users, please reboot the Pi at places mentioned, else it will lead to audio and taskbar issues.**  
 
-  3.1. USB DAC or USB Sound CARD users,  
-  ```
-  sudo chmod +x ./GassistPi/audio-drivers/USB-DAC/scripts/install-usb-dac.sh  
-  sudo ./GassistPi/audio-drivers/USB-DAC/scripts/install-usb-dac.sh
-  speaker-test  
-  ```
+3.1. USB DAC or USB Sound CARD users,  
+```
+sudo chmod +x ./GassistPi/audio-drivers/USB-DAC/scripts/install-usb-dac.sh  
+sudo ./GassistPi/audio-drivers/USB-DAC/scripts/install-usb-dac.sh
+speaker-test  
+```
 
-  3.2. AIY-HAT users,  
-  ```
-  sudo chmod +x ./GassistPi/audio-drivers/AIY-HAT/scripts/configure-driver.sh  
-  sudo ./GassistPi/audio-drivers/AIY-HAT/scripts/configure-driver.sh  
-  sudo reboot  
-  cd /home/${USER}/  
-  sudo chmod +x ./GassistPi/audio-drivers/AIY-HAT/scripts/install-alsa-config.sh  
-  sudo ./GassistPi/audio-drivers/AIY-HAT/scripts/install-alsa-config.sh  
-  speaker-test  
-  ```
+3.2. AIY-HAT users,  
+```
+sudo chmod +x ./GassistPi/audio-drivers/AIY-HAT/scripts/configure-driver.sh  
+sudo ./GassistPi/audio-drivers/AIY-HAT/scripts/configure-driver.sh  
+sudo reboot  
+cd /home/${USER}/  
+sudo chmod +x ./GassistPi/audio-drivers/AIY-HAT/scripts/install-alsa-config.sh  
+sudo ./GassistPi/audio-drivers/AIY-HAT/scripts/install-alsa-config.sh  
+speaker-test  
+```
 
-  3.3. USB MIC AND HDMI users,  
-  ```
-  sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/configure.sh  
-  sudo ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/configure.sh  
-  sudo reboot  
-  cd /home/${USER}/  
-  sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/install-usb-mic-hdmi.sh  
-  sudo ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/install-usb-mic-hdmi.sh  
-  speaker-test  
-  ```
+3.3. USB MIC AND HDMI users,  
+```
+sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/configure.sh  
+sudo ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/configure.sh  
+sudo reboot  
+cd /home/${USER}/  
+sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/install-usb-mic-hdmi.sh  
+sudo ./GassistPi/audio-drivers/USB-MIC-HDMI/scripts/install-usb-mic-hdmi.sh  
+speaker-test  
+```
 
-  3.4. USB MIC AND AUDIO JACK users,  
-  ```  
-  sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-JACK/scripts/usb-mic-onboard-jack.sh  
-  sudo ./GassistPi/audio-drivers/USB-MIC-JACK/scripts/usb-mic-onboard-jack.sh  
-  speaker-test  
-  ```
+3.4. USB MIC AND AUDIO JACK users,  
+```  
+sudo chmod +x ./GassistPi/audio-drivers/USB-MIC-JACK/scripts/usb-mic-onboard-jack.sh  
+sudo ./GassistPi/audio-drivers/USB-MIC-JACK/scripts/usb-mic-onboard-jack.sh  
+speaker-test  
+```
 
-  3.5. CUSTOM VOICE HAT users,  
-  ```
-  sudo chmod +x ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/install-i2s.sh  
-  sudo ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/install-i2s.sh
-  sudo reboot  
-  cd /home/${USER}/  
-  sudo chmod +x ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/custom-voice-hat.sh  
-  sudo ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/custom-voice-hat.sh  
-  speaker-test   
-  ```
+3.5. CUSTOM VOICE HAT users,  
+```
+sudo chmod +x ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/install-i2s.sh  
+sudo ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/install-i2s.sh
+sudo reboot  
+cd /home/${USER}/  
+sudo chmod +x ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/custom-voice-hat.sh  
+sudo ./GassistPi/audio-drivers/CUSTOM-VOICE-HAT/scripts/custom-voice-hat.sh  
+speaker-test   
+```
 
-  3.6. RESPEAKER HAT users,  
-  ```
-  git clone https://github.com/shivasiddharth/seeed-voicecard
-  cd ./seeed-voicecard/  
-  sudo ./install.sh  
-  sudo reboot   
-  speaker-test     
-  ```  
+3.6. RESPEAKER HAT users,  
+```
+git clone https://github.com/shivasiddharth/seeed-voicecard
+cd ./seeed-voicecard/  
+sudo ./install.sh  
+sudo reboot   
+speaker-test     
+```  
 
 **Those using any other DACs or HATs install the cards as per the manufacturer's guide
  and then you can try using the USB-DAC config file after changing the hardware ids**        
@@ -158,23 +162,20 @@ alt="Detailed Youtube Video" width="240" height="180" border="10" /></a>
 2. Place the credentials.json file in/home/${USER}/ directory **DO NOT RENAME**  
 
 3. Use the one-line installer for installing Google Assistant    
-**Pi3 and Armv7 users use the "gassist-installer-pi3.sh" installer and Pi Zero, Pi A and Pi 1 B+ users use the "gassist-installer-pi-zero.sh" installer.**  
 
 3.1 Change directory
 ```
 cd /home/${USER}/      
 ```
 
-3.2 Make the installers Executable  
+3.2 Make the installer Executable  
 ```
-sudo chmod +x ./GassistPi/scripts/gassist-installer-pi3.sh
-sudo chmod +x ./GassistPi/scripts/gassist-installer-pi-zero.sh
+sudo chmod +x ./GassistPi/scripts/gassist-installer.sh
 ```
 
-3.3 Execute the installers **Pi3 and Armv7 users use the "gassist-installer-pi3.sh" installer and Pi Zero, Pi A and Pi 1 B+ users use the "gassist-installer-pi-zero.sh" installer. When Prompted, enter your Google Cloud console Project-Id, A name for your Assistant and the Full Name of your credentials file, including the json extension.**  
+3.3 Execute the installer. **When Prompted, enter your Google Cloud console Project-Id, A name for your Assistant and the Full Name of your credentials file, including the json extension.**  
 ```
-sudo  ./GassistPi/scripts/gassist-installer-pi3.sh  
-sudo  ./GassistPi/scripts/gassist-installer-pi-zero.sh  
+sudo  ./GassistPi/scripts/gassist-installer.sh   
 ```  
 
 4. Copy the google assistant authentication link from terminal and authorize using your google account  
@@ -189,7 +190,7 @@ sudo  ./GassistPi/scripts/gassist-installer-pi-zero.sh
 *************************************************  
 ## **HEADLESS AUTOSTART on BOOT SERVICE SETUP**  
 *************************************************  
-1. Open the service files in the /GassistPi/systemd/ directory and add your project and model ids in the indicated places and save the file.
+1. Open the service files in the /GassistPi/systemd/ directory and verify your project and model ids and save the file.
 
 2. Change directory
 ```
@@ -199,7 +200,7 @@ cd /home/${USER}
 3. Make the service installer executable  
 
 ```
-sudo chmod +x ./GassistPi/scripts/service-installer.sh
+sudo chmod +x ./GassistPi/scripts/service-installer.sh  
 ```  
 
 4. Run the service installer  
@@ -208,18 +209,14 @@ sudo chmod +x ./GassistPi/scripts/service-installer.sh
 sudo ./GassistPi/scripts/service-installer.sh    
 ```  
 
-5. Enable the services - **Pi3 and Armv7 users, enable the "gassistpi-ok-google.service" and Pi Zero, Pi A and Pi 1 B+ users, enable "gassistpi-push-button.service"**          
-**Previously a service was dedicated for stopbutton that stops music/radio etc. Now, its being run in a thread along with the assistant so you will not find the service.**  
+5. Enable the service    
 ```
-sudo systemctl enable gassistpi-ok-google.service  
-sudo systemctl enable gassistpi-push-button.service
+sudo systemctl enable gassistpi.service  
 ```  
 
-6. Start the service - **Pi3 and Armv7 users, start the "gassistpi-ok-google.service" and Pi Zero, Pi A and Pi 1 B+ users, start "gassistpi-push-button.service"**          
-**Previously a service was dedicated for stopbutton that stops music/radio etc. Now, its being run in a thread along with the assistant so you will not find the service.**   
+6. Start the service     
 ```
-sudo systemctl start gassistpi-ok-google.service  
-sudo systemctl start gassistpi-push-button.service
+sudo systemctl start gassistpi.service  
 ```  
 
 **RESTART and ENJOY**  
@@ -273,7 +270,7 @@ This feature uses a YouTube Data API v3.
 Syntax:  
 1. To play the playlists added to your Deezer account:    
 Hey Google, Play playlist _playlist-number_ from Deezer   
-Example: Hey Google, Play playlist number 1 from Deezer   
+Example: Hey Google, Play playlist 1 from Deezer   
 
 ************************************************
 ### **MUSIC STREAMING FROM GAANA.COM**  
@@ -296,7 +293,7 @@ Syntaxes:
 **Note - It is necessary to Say the full "Gaana.com", otherwise the assistant will pick it up as Ghana (a country).**    
 1. To play the playlists added in config.yaml file:  
 Hey Google, Play playlist _playlist-number_ from Gaana.com   
-Example: Hey Google, Play playlist number 1 from Gaana.com   
+Example: Hey Google, Play playlist 1 from Gaana.com   
 
 2. To play other playlists:  
 Hey Google, Play _user-playlist-query_ from Gaana.com
@@ -740,7 +737,7 @@ For Kodi to play the YouTube video, you need to add and enable the YouTube Plugi
 
 
 ************************************************  
-### **GOOGLE HOME LIKE NEOPIXEL INDICATOR**
+### **GOOGLE HOME LIKE NEOPIXEL INDICATOR FOR RASPBERRY PI BOARDS**
 ************************************************  
 1. Change the Pin numbers in the given sketch according to your board and upload it.  
 
@@ -776,11 +773,12 @@ For Kodi to play the YouTube video, you need to add and enable the YouTube Plugi
 | 'Yellow Orange' |  
 
 ************************************************  
-### **Sending voice messages from the phone to the raspberry**  
+### **SENDING VOICE MESSAGES FROM PHONE TO GOOGLE ASSISTANT ON SBCs**  
 ************************************************
-1. https://support.google.com/googlehome/answer/7531913.
+1. https://support.google.com/googlehome/answer/7531913.  
+
 ************************************************  
-### **LIST OF GPIOs USED**  
+### **LIST OF GPIOs USED IN RASPBERRY PI BOARDS**  
 ************************************************  
 | GPIO Number (BCM) | Purpose                                        |
 |-------------------|------------------------------------------------|
