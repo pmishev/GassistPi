@@ -10,11 +10,11 @@ from oauth2client.tools import argparser
 from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy.util as util
 import spotipy.oauth2 as oauth2
-from googletrans import Translator
 from pushbullet import Pushbullet
 from mediaplayer import api
 from youtube_search_engine import google_cloud_api_key
 from gtts import gTTS
+from googletrans import Translator
 from youtube_search_engine import youtube_search
 from youtube_search_engine import youtube_stream_link
 import requests
@@ -218,7 +218,7 @@ def trans(words,lang):
     transword= translator.translate(words, dest=lang)
     transword=transword.text
     transword=transword.replace("Text, ",'',1)
-    transword=transword.strip()
+    transword=transword.strip()    
     print(transword)
     return transword
 
@@ -1325,17 +1325,16 @@ def scan_spotify_playlists():
         # print("")
         # print("")
         for playlist in playlists['items']:
-            if playlist['owner']['id'] == username:
-                # print (playlist['name'])
-                playlist_name=playlist['name']
-                # print("")
-                # print("")
-    ##            print ('  total tracks', playlist['tracks']['total'])
-    ##            print("")
-    ##            print("")
-                results = sp.user_playlist(username, playlist['id'],fields="tracks,next")
-                tracks = results['tracks']
-                spotify_tracks_list=show_spotify_track_names(tracks)
+            # print (playlist['name'])
+            playlist_name=playlist['name']
+            # print("")
+            # print("")
+##            print ('  total tracks', playlist['tracks']['total'])
+##            print("")
+##            print("")
+            results = sp.user_playlist(playlist['owner']['id'], playlist['id'],fields="tracks,next")
+            tracks = results['tracks']
+            spotify_tracks_list=show_spotify_track_names(tracks)
             playlistdetails.append(i)
             playlistdetails.append(playlist_name)
             playlistdetails.append(spotify_tracks_list)
