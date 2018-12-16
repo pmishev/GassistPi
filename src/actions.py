@@ -10,18 +10,22 @@ from oauth2client.tools import argparser
 from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy.util as util
 import spotipy.oauth2 as oauth2
-from googletrans import Translator
 from pushbullet import Pushbullet
 from mediaplayer import api
 from youtube_search_engine import google_cloud_api_key
-from gtts import gTTS
+from googletrans import Translator
 from youtube_search_engine import youtube_search
 from youtube_search_engine import youtube_stream_link
+from gtts import gTTS
 import requests
 import mediaplayer
 import os
 import os.path
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except Exception as e:
+    if str(e) == 'No module named \'RPi\'':
+        GPIO = None
 import time
 import re
 import subprocess
@@ -58,6 +62,8 @@ elif configuration['Language']['Choice']=='es':
     keywordfile= '{}/src/keywords_es.yaml'.format(ROOT_PATH)
 elif configuration['Language']['Choice']=='nl':
     keywordfile= '{}/src/keywords_nl.yaml'.format(ROOT_PATH)
+elif configuration['Language']['Choice']=='sv':
+    keywordfile= '{}/src/keywords_sv.yaml'.format(ROOT_PATH)
 else:
     keywordfile= '{}/src/keywords_en.yaml'.format(ROOT_PATH)
 with open(keywordfile,'r') as conf:
@@ -111,12 +117,29 @@ videodirectory=configuration['Kodi']['videodirectory']
 windowcmd=configuration['Kodi']['windowcmd']
 window=configuration['Kodi']['window']
 
+if GPIO!=None:
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    #Number of entities in 'var' and 'PINS' should be the same
+    var = configuration['Raspberrypi_GPIO_Control']['lightnames']
+    gpio = configuration['Gpios']['picontrol']
+    for pin in gpio:
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, 0)
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
-#Number of entities in 'var' and 'PINS' should be the same
-var = configuration['Raspberrypi_GPIO_Control']['lightnames']
-gpio = configuration['Gpios']['picontrol']
+    #Servo pin declaration
+    servopin=configuration['Gpios']['servo'][0]
+    GPIO.setup(servopin, GPIO.OUT)
+    pwm=GPIO.PWM(servopin, 50)
+    pwm.start(0)
+
+    #Stopbutton
+    stoppushbutton=configuration['Gpios']['stopbutton_music_AIY_pushbutton'][0]
+    GPIO.setup(stoppushbutton, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIOcontrol=True
+else:
+    GPIOcontrol=False
+
 
 #Number of station names and station links should be the same
 stnname=configuration['Radio_stations']['stationnames']
@@ -130,19 +153,6 @@ ip=configuration['ESP']['IP']
 devname=configuration['ESP']['devicename']
 devid=configuration['ESP']['deviceid']
 
-for pin in gpio:
-    GPIO.setup(pin, GPIO.OUT)
-    GPIO.output(pin, 0)
-
-#Servo pin declaration
-servopin=configuration['Gpios']['servo'][0]
-GPIO.setup(servopin, GPIO.OUT)
-pwm=GPIO.PWM(servopin, 50)
-pwm.start(0)
-
-#Stopbutton
-stoppushbutton=configuration['Gpios']['stopbutton_music_AIY_pushbutton'][0]
-GPIO.setup(stoppushbutton, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 playshell = None
 
 #Initialize colour list
@@ -179,10 +189,19 @@ sportsnews = "http://feeds.feedburner.com/ndtvsports-latest"
 quote = "http://feeds.feedburner.com/brainyquote/QUOTEBR"
 
 ##Speech and translator declarations
-ttsfilename="/tmp/say.mp3"
 translator = Translator()
+femalettsfilename="/tmp/female-say.mp3"
+malettsfilename="/tmp/male-say.wav"
 language=configuration['Language']['Choice']
-
+gender=''
+if configuration['Voice_Custom_Actions']=='Male' and language=='en':
+    gender='Male'
+elif language=='it':
+    gender='Male'
+elif configuration['Voice_Custom_Actions']=='Male' and language!='en':
+    gender='Female'
+else:
+    gender='Female'
 
 #Function for google KS custom search engine
 def kickstrater_search(query):
@@ -218,11 +237,15 @@ def trans(words,lang):
 def say(words):
     newword=trans(words,language)
     tts = gTTS(text=newword, lang=language)
-    tts.save(ttsfilename)
-    os.system("mpg123 "+ttsfilename)
-    os.remove(ttsfilename)
-
-
+    tts.save(femalettsfilename)
+    if gender=='Male':
+        os.system('sox ' + femalettsfilename + ' ' + malettsfilename + ' pitch -450')
+        os.remove(femalettsfilename)
+        os.system('aplay ' + malettsfilename)
+        os.remove(malettsfilename)
+    else:
+        os.system("mpg123 "+femalettsfilename)
+        os.remove(femalettsfilename)
 
 #Function to get HEX and RGB values for requested colour
 def getcolours(phrase):
@@ -286,18 +309,22 @@ def ESP(phrase):
             elif custom_action_keyword['Dict']['Off'] in phrase:
                 ctrl='=OFF'
                 say("Turning Off " + name)
-            rq = requests.head("https://"+ip + dev + ctrl)
+            rq = requests.head("http://"+ip + dev + ctrl)
 
 
 #Stepper Motor control
 def SetAngle(angle):
-    duty = angle/18 + 2
-    GPIO.output(servopin, True)
-    say("Moving motor by " + str(angle) + " degrees")
-    pwm.ChangeDutyCycle(duty)
-    time.sleep(1)
-    pwm.ChangeDutyCycle(0)
-    GPIO.output(servopin, False)
+    if GPIOcontrol:
+        duty = angle/18 + 2
+        GPIO.output(servopin, True)
+        say("Moving motor by " + str(angle) + " degrees")
+        pwm.ChangeDutyCycle(duty)
+        time.sleep(1)
+        pwm.ChangeDutyCycle(0)
+        GPIO.output(servopin, False)
+    else:
+        say("GPIO controls, is not supported for your device.")
+
 
 
 def stop():
@@ -345,21 +372,24 @@ def feed(phrase):
         numfeeds=feedlength
     title=feed['feed']['title']
     say(title)
-    #To stop the feed, press and hold stop button
-    while GPIO.input(stoppushbutton):
-        for x in range(0,numfeeds):
-            content=feed['entries'][x]['title']
-            print(content)
-            say(content)
-            summary=feed['entries'][x]['summary']
-            print(summary)
-            say(summary)
-            if not GPIO.input(stoppushbutton):
-              break
-        if x == numfeeds-1:
-            break
-        else:
-            continue
+    if GPIOcontrol:
+        #To stop the feed, press and hold stop button
+        while GPIO.input(stoppushbutton):
+            for x in range(0,numfeeds):
+                content=feed['entries'][x]['title']
+                print(content)
+                say(content)
+                summary=feed['entries'][x]['summary']
+                print(summary)
+                say(summary)
+                if not GPIO.input(stoppushbutton):
+                  break
+            if x == numfeeds-1:
+                break
+            else:
+                continue
+    else:
+        print("GPIO controls, is not supported for your device. You need to wait for feeds to automatically stop")
 
 
 
@@ -1310,17 +1340,16 @@ def scan_spotify_playlists():
         # print("")
         # print("")
         for playlist in playlists['items']:
-            if playlist['owner']['id'] == username:
-                # print (playlist['name'])
-                playlist_name=playlist['name']
-                # print("")
-                # print("")
-    ##            print ('  total tracks', playlist['tracks']['total'])
-    ##            print("")
-    ##            print("")
-                results = sp.user_playlist(username, playlist['id'],fields="tracks,next")
-                tracks = results['tracks']
-                spotify_tracks_list=show_spotify_track_names(tracks)
+            # print (playlist['name'])
+            playlist_name=playlist['name']
+            # print("")
+            # print("")
+##            print ('  total tracks', playlist['tracks']['total'])
+##            print("")
+##            print("")
+            results = sp.user_playlist(playlist['owner']['id'], playlist['id'],fields="tracks,next")
+            tracks = results['tracks']
+            spotify_tracks_list=show_spotify_track_names(tracks)
             playlistdetails.append(i)
             playlistdetails.append(playlist_name)
             playlistdetails.append(spotify_tracks_list)
@@ -1380,7 +1409,7 @@ def domoticz_control(query,index,devicename):
             devreq=requests.head("https://" + configuration['Domoticz']['Server_IP'][0] + ":" + configuration['Domoticz']['Server_port'][0] + "/json.htm?type=command&param=switchlight&idx=" + index + "&switchcmd=Toggle",verify=False)
             say('Toggling ' + devicename + ' .')
         if custom_action_keyword['Dict']['Colour'] in query:
-            if 'RGB' in domoticz_devices['result'][i]['SubType']:
+            if 'RGB' in domoticz_devices['result'][devorder]['SubType']:
                 rcolour,gcolour,bcolour,hexcolour,colour=getcolours(query)
                 hexcolour=hexcolour.replace("#","",1)
                 hexcolour=hexcolour.strip()
@@ -1392,7 +1421,7 @@ def domoticz_control(query,index,devicename):
             else:
                 say('The requested light is not a colour bulb')
         if custom_action_keyword['Dict']['Brightness'] in query:
-            if domoticz_devices['result'][i]['HaveDimmer']:
+            if domoticz_devices['result'][devorder]['HaveDimmer']:
                 if 'hundred' in query or 'hundred'.lower() in query or custom_action_keyword['Dict']['Maximum'] in query:
                     bright=str(100)
                 elif 'zero' in query or custom_action_keyword['Dict']['Minimum'] in query:
@@ -1532,12 +1561,15 @@ def Action(phrase):
         if 'zero' in phrase:
             SetAngle(0)
     else:
-        for num, name in enumerate(var):
-            if name.lower() in phrase:
-                pinout=gpio[num]
-                if custom_action_keyword['Dict']['On'] in phrase:
-                    GPIO.output(pinout, 1)
-                    say("Turning On " + name)
-                elif custom_action_keyword['Dict']['Off'] in phrase:
-                    GPIO.output(pinout, 0)
-                    say("Turning Off " + name)
+        if GPIOcontrol:
+            for num, name in enumerate(var):
+                if name.lower() in phrase:
+                    pinout=gpio[num]
+                    if custom_action_keyword['Dict']['On'] in phrase:
+                        GPIO.output(pinout, 1)
+                        say("Turning On " + name)
+                    elif custom_action_keyword['Dict']['Off'] in phrase:
+                        GPIO.output(pinout, 0)
+                        say("Turning Off " + name)
+        else:
+            say("GPIO controls, is not supported for your device.")

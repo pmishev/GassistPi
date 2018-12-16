@@ -16,7 +16,11 @@
 
 from __future__ import print_function
 from kodijson import Kodi, PLAYER_VIDEO
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except Exception as e:
+    if str(e) == 'No module named \'RPi\'':
+        GPIO = None
 import argparse
 import json
 import os.path
@@ -61,14 +65,19 @@ from actions import spotify_playlist_select
 from actions import configuration
 from actions import custom_action_keyword
 from threading import Thread
-from indicator import assistantindicator
-from indicator import stoppushbutton
+if GPIO!=None:
+    from indicator import assistantindicator
+    from indicator import stoppushbutton
+    GPIOcontrol=True
+else:
+    GPIOcontrol=False
 from pathlib import Path
 from actions import Domoticz_Device_Control
 from actions import domoticz_control
 from actions import domoticz_devices
 from actions import gaana_playlist_select
 from actions import deezer_playlist_select
+from actions import gender
 
 try:
     FileNotFoundError
@@ -98,7 +107,7 @@ USER_PATH = os.path.realpath(os.path.join(__file__, '..', '..','..'))
 # Kodi("http://IP-ADDRESS-OF-KODI:8080/jsonrpc", "username", "password")
 kodiurl=("http://"+str(configuration['Kodi']['ip'])+":"+str(configuration['Kodi']['port'])+"/jsonrpc")
 kodi = Kodi(kodiurl, configuration['Kodi']['username'], configuration['Kodi']['password'])
-if configuration['Kodi']['control']=='Enabled':
+if configuration['Kodi']['Kodi_Control']=='Enabled':
     kodicontrol=True
 else:
     kodicontrol=False
@@ -161,7 +170,8 @@ class Myassistant():
         # self.detector = snowboydecoder.HotwordDetector(models, sensitivity=self.sensitivity)
         self.detector = snowboydecoder.HotwordDetector(models, sensitivity=[0.8, 0.80]) # TODO: change structure of hotwords array so sensitivity can be applied individually
         self.t1 = Thread(target=self.start_detector)
-        self.t2 = Thread(target=self.pushbutton)
+        if GPIOcontrol:
+            self.t2 = Thread(target=self.pushbutton)
 
     def signal_handler(self,signal, frame):
         self.interrupted = True
@@ -179,7 +189,10 @@ class Myassistant():
                 self.assistant.set_mic_mute(False)
             # if custom_wakeword:
             #     self.t1.start()
-            subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-On.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if gender=='Male':
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-On-Male.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-On-Female.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("Turning on the microphone")
         else:
             open('{}/.mute'.format(USER_PATH), 'a').close()
@@ -187,7 +200,10 @@ class Myassistant():
             self.assistant.set_mic_mute(True)
             # if custom_wakeword:
             #     self.thread_end(t1)
-            subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-Off.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if gender=='Male':
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-Off-Male.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Mic-Off-Female.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print("Turning off the microphone")
 
     def buttondoublepress(self):
@@ -198,28 +214,31 @@ class Myassistant():
         print("Create your own action for button triple press")
 
     def pushbutton(self):
-        while mutestopbutton:
-            if GPIO.event_detected(stoppushbutton):
-                GPIO.remove_event_detect(stoppushbutton)
-                now = time.time()
-                count = 1
-                GPIO.add_event_detect(stoppushbutton,GPIO.RISING)
-                while time.time() < now + 1:
-                     if GPIO.event_detected(stoppushbutton):
-                         count +=1
-                         time.sleep(.25)
-                if count == 2:
-                    self.buttonsinglepress()
+        if GPIOcontrol:
+            while mutestopbutton:
+                time.sleep(.1)
+                if GPIO.event_detected(stoppushbutton):
                     GPIO.remove_event_detect(stoppushbutton)
-                    GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
-                elif count == 3:
-                    self.buttondoublepress()
-                    GPIO.remove_event_detect(stoppushbutton)
-                    GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
-                elif count == 4:
-                    self.buttontriplepress()
-                    GPIO.remove_event_detect(stoppushbutton)
-                    GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
+                    now = time.time()
+                    count = 1
+                    GPIO.add_event_detect(stoppushbutton,GPIO.RISING)
+                    while time.time() < now + 1:
+                         if GPIO.event_detected(stoppushbutton):
+                             count +=1
+                             time.sleep(.25)
+                    if count == 2:
+                        self.buttonsinglepress()
+                        GPIO.remove_event_detect(stoppushbutton)
+                        GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
+                    elif count == 3:
+                        self.buttondoublepress()
+                        GPIO.remove_event_detect(stoppushbutton)
+                        GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
+                    elif count == 4:
+                        self.buttontriplepress()
+                        GPIO.remove_event_detect(stoppushbutton)
+                        GPIO.add_event_detect(stoppushbutton,GPIO.FALLING)
+
 
     def process_device_actions(self,event, device_id):
         if 'inputs' in event.args:
@@ -246,7 +265,8 @@ class Myassistant():
         print(event)
         if event.type == EventType.ON_START_FINISHED:
             self.can_start_conversation = True
-            self.t2.start()
+            if GPIOcontrol:
+                self.t2.start()
             if os.path.isfile("{}/.mute".format(USER_PATH)):
                 assistantindicator('mute')
             if (configuration['Wakewords']['Ok_Google']=='Disabled' or os.path.isfile("{}/.mute".format(USER_PATH))):
@@ -263,11 +283,20 @@ class Myassistant():
                 with open('{}/.volume.json'.format(USER_PATH), 'w') as f:
                        json.dump(vollevel, f)
                 kodi.Application.SetVolume({"volume": 0})
-
-            assistantindicator('listening')
+            if GPIOcontrol:
+                assistantindicator('listening')
             if vlcplayer.is_vlc_playing():
                 if os.path.isfile("{}/.mediavolume.json".format(USER_PATH)):
-                    vlcplayer.set_vlc_volume(15)
+                    try:
+                        with open('{}/.mediavolume.json'.format(USER_PATH), 'r') as vol:
+                            volume = json.load(vol)
+                        vlcplayer.set_vlc_volume(15)
+                    except json.decoder.JSONDecodeError:
+                        currentvolume=vlcplayer.get_vlc_volume()
+                        print(currentvolume)
+                        with open('{}/.mediavolume.json'.format(USER_PATH), 'w') as vol:
+                           json.dump(currentvolume, vol)
+                        vlcplayer.set_vlc_volume(15)
                 else:
                     currentvolume=vlcplayer.get_vlc_volume()
                     print(currentvolume)
@@ -278,7 +307,8 @@ class Myassistant():
 
         if (event.type == EventType.ON_CONVERSATION_TURN_TIMEOUT or event.type == EventType.ON_NO_RESPONSE):
             self.can_start_conversation = True
-            assistantindicator('off')
+            if GPIOcontrol:
+                assistantindicator('off')
             if kodicontrol:
                 with open('{}/.volume.json'.format(USER_PATH), 'r') as f:
                        vollevel = json.load(f)
@@ -287,31 +317,37 @@ class Myassistant():
             if (configuration['Wakewords']['Ok_Google']=='Disabled' or os.path.isfile("{}/.mute".format(USER_PATH))):
                   self.assistant.set_mic_mute(True)
             if os.path.isfile("{}/.mute".format(USER_PATH)):
-                assistantindicator('mute')
+                if GPIOcontrol:
+                    assistantindicator('mute')
             if vlcplayer.is_vlc_playing():
                 with open('{}/.mediavolume.json'.format(USER_PATH), 'r') as vol:
                     oldvolume = json.load(vol)
                 vlcplayer.set_vlc_volume(int(oldvolume))
 
         if (event.type == EventType.ON_RESPONDING_STARTED and event.args and not event.args['is_error_response']):
-            assistantindicator('speaking')
+            if GPIOcontrol:
+                assistantindicator('speaking')
 
         if event.type == EventType.ON_RESPONDING_FINISHED:
-            assistantindicator('off')
+            if GPIOcontrol:
+                assistantindicator('off')
 
         if event.type == EventType.ON_RECOGNIZING_SPEECH_FINISHED:
-            assistantindicator('off')
+            if GPIOcontrol:
+                assistantindicator('off')
 
         print(event)
 
         if (event.type == EventType.ON_CONVERSATION_TURN_FINISHED and
                 event.args and not event.args['with_follow_on_turn']):
             self.can_start_conversation = True
-            assistantindicator('off')
+            if GPIOcontrol:
+                assistantindicator('off')
             if (configuration['Wakewords']['Ok_Google']=='Disabled' or os.path.isfile("{}/.mute".format(USER_PATH))):
                 self.assistant.set_mic_mute(True)
             if os.path.isfile("{}/.mute".format(USER_PATH)):
-                assistantindicator('mute')
+                if GPIOcontrol:
+                    assistantindicator('mute')
             if kodicontrol:
                 with open('{}/.volume.json'.format(USER_PATH), 'r') as f:
                        vollevel = json.load(f)
@@ -422,7 +458,10 @@ class Myassistant():
         device_model_id = args.device_model_id or device_model_id
         with Assistant(credentials, device_model_id) as assistant:
             self.assistant = assistant
-            subprocess.Popen(["aplay", "{}/sample-audio-files/Startup.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if gender=='Male':
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Startup-Male.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                subprocess.Popen(["aplay", "{}/sample-audio-files/Startup-Female.wav".format(ROOT_PATH)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             events = assistant.start()
             device_id = assistant.device_id
             print('device_model_id:', device_model_id)
@@ -446,32 +485,34 @@ class Myassistant():
             for event in events:
                 self.process_event(event)
                 usrcmd=event.args
-                if os.path.isfile('/opt/hue-emulator/config.json'):
-                    with open('/opt/hue-emulator/config.json', 'r') as config:
-                         hueconfig = json.load(config)
-                    for i in range(1,len(hueconfig['lights'])+1):
+                if configuration['DIYHUE']['DIYHUE_Control']=='Enabled':
+                    if os.path.isfile('/opt/hue-emulator/config.json'):
+                        with open('/opt/hue-emulator/config.json', 'r') as config:
+                             hueconfig = json.load(config)
+                        for i in range(1,len(hueconfig['lights'])+1):
+                            try:
+                                if str(hueconfig['lights'][str(i)]['name']).lower() in str(usrcmd).lower():
+                                    assistant.stop_conversation()
+                                    hue_control(str(usrcmd).lower(),str(i),str(hueconfig['lights_address'][str(i)]['ip']))
+                                    break
+                            except Keyerror:
+                                say('Unable to help, please check your config file')
+                if configuration['Tasmota_devicelist']['Tasmota_Control']=='Enabled':
+                    for num, name in enumerate(tasmota_devicelist):
+                        if name.lower() in str(usrcmd).lower():
+                            assistant.stop_conversation()
+                            tasmota_control(str(usrcmd).lower(), name.lower(),tasmota_deviceip[num],tasmota_deviceportid[num])
+                            break
+                if configuration['Conversation']['Conversation_Control']=='Enabled':
+                    for i in range(1,numques+1):
                         try:
-                            if str(hueconfig['lights'][str(i)]['name']).lower() in str(usrcmd).lower():
+                            if str(configuration['Conversation']['question'][i][0]).lower() in str(usrcmd).lower():
                                 assistant.stop_conversation()
-                                hue_control(str(usrcmd).lower(),str(i),str(hueconfig['lights_address'][str(i)]['ip']))
+                                selectedans=random.sample(configuration['Conversation']['answer'][i],1)
+                                say(selectedans[0])
                                 break
                         except Keyerror:
-                            say('Unable to help, please check your config file')
-
-                for num, name in enumerate(tasmota_devicelist):
-                    if name.lower() in str(usrcmd).lower():
-                        assistant.stop_conversation()
-                        tasmota_control(str(usrcmd).lower(), name.lower(),tasmota_deviceip[num],tasmota_deviceportid[num])
-                        break
-                for i in range(1,numques+1):
-                    try:
-                        if str(configuration['Conversation']['question'][i][0]).lower() in str(usrcmd).lower():
-                            assistant.stop_conversation()
-                            selectedans=random.sample(configuration['Conversation']['answer'][i],1)
-                            say(selectedans[0])
-                            break
-                    except Keyerror:
-                        say('Please check if the number of questions matches the number of answers')
+                            say('Please check if the number of questions matches the number of answers')
 
                 if Domoticz_Device_Control==True and len(domoticz_devices['result'])>0:
                     if len(configuration['Domoticz']['Devices']['Name'])==len(configuration['Domoticz']['Devices']['Id']):
@@ -519,33 +560,38 @@ class Myassistant():
                 if (custom_action_keyword['Keywords']['Kickstarter_tracking'][0]).lower() in str(usrcmd).lower():
                     assistant.stop_conversation()
                     kickstarter_tracker(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['Pi_GPIO_control'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    Action(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['YouTube_music_stream'][0]).lower() in str(usrcmd).lower() and 'kodi' not in str(usrcmd).lower() and 'chromecast' not in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    vlcplayer.stop_vlc()
-                    if 'autoplay'.lower() in str(usrcmd).lower():
-                        YouTube_Autoplay(str(usrcmd).lower())
-                    else:
-                        YouTube_No_Autoplay(str(usrcmd).lower())
+                if configuration['Raspberrypi_GPIO_Control']['GPIO_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['Pi_GPIO_control'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        Action(str(usrcmd).lower())
+                if configuration['YouTube']['YouTube_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['YouTube_music_stream'][0]).lower() in str(usrcmd).lower() and 'kodi' not in str(usrcmd).lower() and 'chromecast' not in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        vlcplayer.stop_vlc()
+                        if 'autoplay'.lower() in str(usrcmd).lower():
+                            YouTube_Autoplay(str(usrcmd).lower())
+                        else:
+                            YouTube_No_Autoplay(str(usrcmd).lower())
                 if (custom_action_keyword['Keywords']['Stop_music'][0]).lower() in str(usrcmd).lower():
                     stop()
-                if 'radio'.lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    radio(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['ESP_control'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    ESP(str(usrcmd).lower())
+                if configuration['Radio_stations']['Radio_Control']=='Enabled':
+                    if 'radio'.lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        radio(str(usrcmd).lower())
+                if configuration['ESP']['ESP_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['ESP_control'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        ESP(str(usrcmd).lower())
                 if (custom_action_keyword['Keywords']['Parcel_tracking'][0]).lower() in str(usrcmd).lower():
                     assistant.stop_conversation()
                     track()
                 if (custom_action_keyword['Keywords']['RSS'][0]).lower() in str(usrcmd).lower() or (custom_action_keyword['Keywords']['RSS'][1]).lower() in str(usrcmd).lower():
                     assistant.stop_conversation()
                     feed(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['Kodi_actions'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    kodiactions(str(usrcmd).lower())
+                if kodicontrol:
+                    if (custom_action_keyword['Keywords']['Kodi_actions'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        kodiactions(str(usrcmd).lower())
                 # Google Assistant now comes built in with chromecast control, so custom function has been commented
                 # if 'chromecast'.lower() in str(usrcmd).lower():
                 #     assistant.stop_conversation()
@@ -597,10 +643,15 @@ class Myassistant():
                             vlcplayer.set_vlc_volume(int(settingvollevel))
                         elif (custom_action_keyword['Dict']['Increase']).lower() in str(usrcmd).lower() or (custom_action_keyword['Dict']['Decrease']).lower() in str(usrcmd).lower() or 'reduce'.lower() in str(usrcmd).lower():
                             if os.path.isfile("{}/.mediavolume.json".format(USER_PATH)):
-                                with open('{}/.mediavolume.json'.format(USER_PATH), 'r') as vol:
-                                    oldvollevel = json.load(vol)
-                                    for oldvollevel in re.findall(r'\b\d+\b', str(oldvollevel)):
-                                        oldvollevel=int(oldvollevel)
+                                try:
+                                    with open('{}/.mediavolume.json'.format(USER_PATH), 'r') as vol:
+                                        oldvollevel = json.load(vol)
+                                        for oldvollevel in re.findall(r'\b\d+\b', str(oldvollevel)):
+                                            oldvollevel=int(oldvollevel)
+                                except json.decoder.JSONDecodeError:
+                                    oldvollevel=vlcplayer.get_vlc_volume
+                                    for oldvollevel in re.findall(r"[-+]?\d*\.\d+|\d+", str(output)):
+                                        oldvollevel=int(oldvollevel)                       
                             else:
                                 oldvollevel=vlcplayer.get_vlc_volume
                                 for oldvollevel in re.findall(r"[-+]?\d*\.\d+|\d+", str(output)):
@@ -614,9 +665,9 @@ class Myassistant():
                                 newvollevel= oldvollevel+ changevollevel
                                 print(newvollevel)
                                 if int(newvollevel)>100:
-                                    settingvollevel==100
+                                    settingvollevel=100
                                 elif int(newvollevel)<0:
-                                    settingvollevel==0
+                                    settingvollevel=0
                                 else:
                                     settingvollevel=newvollevel
                                 with open('{}/.mediavolume.json'.format(USER_PATH), 'w') as vol:
@@ -632,9 +683,9 @@ class Myassistant():
                                 newvollevel= oldvollevel - changevollevel
                                 print(newvollevel)
                                 if int(newvollevel)>100:
-                                    settingvollevel==100
+                                    settingvollevel=100
                                 elif int(newvollevel)<0:
-                                    settingvollevel==0
+                                    settingvollevel=0
                                 else:
                                     settingvollevel=newvollevel
                                 with open('{}/.mediavolume.json'.format(USER_PATH), 'w') as vol:
@@ -648,22 +699,26 @@ class Myassistant():
                 if (custom_action_keyword['Keywords']['Music_index_refresh'][0]).lower() in str(usrcmd).lower() and (custom_action_keyword['Keywords']['Music_index_refresh'][1]).lower() in str(usrcmd).lower():
                     assistant.stop_conversation()
                     refreshlists()
-                if (custom_action_keyword['Keywords']['Google_music_streaming'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    vlcplayer.stop_vlc()
-                    gmusicselect(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['Spotify_music_streaming'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    vlcplayer.stop_vlc()
-                    spotify_playlist_select(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['Gaana_music_streaming'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    vlcplayer.stop_vlc()
-                    gaana_playlist_select(str(usrcmd).lower())
-                if (custom_action_keyword['Keywords']['Deezer_music_streaming'][0]).lower() in str(usrcmd).lower():
-                    assistant.stop_conversation()
-                    vlcplayer.stop_vlc()
-                    deezer_playlist_select(str(usrcmd).lower())
+                if configuration['Gmusicapi']['Gmusic_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['Google_music_streaming'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        vlcplayer.stop_vlc()
+                        gmusicselect(str(usrcmd).lower())
+                if configuration['Spotify']['Spotify_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['Spotify_music_streaming'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        vlcplayer.stop_vlc()
+                        spotify_playlist_select(str(usrcmd).lower())
+                if configuration['Gaana']['Gaana_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['Gaana_music_streaming'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        vlcplayer.stop_vlc()
+                        gaana_playlist_select(str(usrcmd).lower())
+                if configuration['Deezer']['Deezer_Control']=='Enabled':
+                    if (custom_action_keyword['Keywords']['Deezer_music_streaming'][0]).lower() in str(usrcmd).lower():
+                        assistant.stop_conversation()
+                        vlcplayer.stop_vlc()
+                        deezer_playlist_select(str(usrcmd).lower())
 
         if custom_wakeword:
             self.detector.terminate()
