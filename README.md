@@ -6,16 +6,16 @@
 
 ### **Community: For Non-Issue Help and Interaction** [![Join the chat at https://gitter.im/publiclab/publiclab](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/GassistPi/Lobby/)
 *******************************************************************************************************************************
-## 14-Dec-2018 Update:
-**Added a switch for major custom actions and users can toggle between male and female voice for the custom generated text.**          
+## 10-Jan-2019 Update:
+**Added Google Cloud Text to Speech Conversion For A More Natural Custom Text Voice Outs**               
 *******************************************************************************************************************************
 
 # Features (All features are applicable to all boards, unless and otherwise mentioned):  
 **1.   Headless auto start on boot.**    
-**2.   Voice control of GPIOs without IFTTT, api.ai, Actions SDK (Only for Raspberry Pi Boards).**   
+**2.   Voice control of GPIOs without IFTTT, api.ai, Actions SDK (Only for Raspberry Pi Boards - non OSMC).**   
 **3.   Voice control of NodeMCU without IFTTT and MQTT.**  
 **4.   Radio streaming.**  
-**5.   Voice control of servo connected to RPi GPIO (Only for Raspberry Pi Boards).**    
+**5.   Voice control of servo connected to RPi GPIO (Only for Raspberry Pi Boards - non OSMC).**    
 **6.   Safe shutdown RPi using voice command.**  
 **7.   Stream Music from YouTube.**  
 **8.   Indicator lights for assistant listening and speaking events.**  
@@ -35,17 +35,20 @@
 **22.  Sending voice messages from the phone to the raspberry.**  
 **23.  Play your Spotify playlist.**  
 **24.  Custom wakeword activation for all Pi boards.**      
-**25.  Mute microphones to prevent listening to Ok-Google hotword (Only Raspberry Pi Boards).**  
+**25.  Mute microphones to prevent listening to Ok-Google hotword (Only Raspberry Pi Boards - non OSMC).**  
 **26.  Create custom conversations.**  
 **27.  Control of lights added to Domoticz.**  
 **28.  Stream music from Gaana.com.**  
 **29.  Stream your playlist from Deezer.**    
 **30.  Custom actions in French, Italian, German, Dutch and Spanish.**    
+**31.  Send commands over MQTT to the Google Assistant (Only Armv7 boards).**  
+**32.  Control Assistant using IR Remote (Only Raspberry Armv7 boards).**  
 
 *******************************************************************************************************************************  
 ### Only OSes suported are:
 - Armbian Stretch    
 - Raspbian Stretch   
+- OSMC Stretch   
 
 **Raspberry Pi users please use the latest Raspbian Desktop/Lite image- [Link](https://www.raspberrypi.org/downloads/raspbian/). Other board users please use the lastest Armbian image- [Link](https://www.armbian.com/download/)**  
 *******************************************************************************************************************************
@@ -239,6 +242,26 @@ Open a terminal and execute the following:
 ```
 Insert your Project Id and Model Id in quotes in the mentioned places
 
+************************************************
+## **CHECKING FOR PROJECT UPDATES AND UPDATING THE PROJECT**   
+************************************************
+1. Change directory
+```
+cd /home/${USER}/   
+```
+2. Make the update script executable
+```
+sudo chmod +x /home/${USER}/GassistPi/scripts/update.sh
+```
+4. Run the update script
+```
+sudo /home/${USER}/GassistPi/scripts/update.sh
+```
+5. If there is an update available, the project will be updated else the script will make a smooth exit.  
+
+6. If the Project is updated, reconfigure the **config.yaml** file.   
+**The script makes a backup before updating eg. GassistPi.bak-20xx-xx-xx**   
+
 *******************************************************************
 ## **USING THE CUSTOMIZATIONS**  
 *******************************************************************
@@ -246,14 +269,82 @@ Insert your Project Id and Model Id in quotes in the mentioned places
 *******************************************************************
 Major custom actions have been provided with a control key or switch in the config.yaml.    
 Set it to "Enabled" to enable the custom actions and set it to "Disabled" to disable them.    
-
+************************************************   
 ### **CUSTOM ACTIONS IN Non-English LANGUAGES**    
-************************************************
+************************************************     
 Languages supported: French, Italian, Spanish, Dutch, German and Swedish.  
 
 In the **config.yaml** file, under the **Languages and Choice** option set your desired language.   
 
 Use the Translated versions of the English syntaxes given for all the custom actions.  
+
+************************************************
+### **USING GOOGLE CLOUD TEXT TO SPEECH**   
+************************************************
+**NOTE: GOOGLE CLOUD TEXT TO SPEECH HAS A LIMITED USAGE ACCESS. ONCE THE QUOTA IS EXHAUSTED, THE PROJECT WILL AUTOMATICALLY SWITCH TO gTTS**  
+
+1. Go to the projects page on your Google Cloud Console-> https://console.cloud.google.com/project  
+2. Select your project from the list.  
+3. On the left top corner, click on the hamburger icon or three horizontal stacked lines.  
+4. "From the API and services" option, select library and in the search bar type **text**, select "Cloud Text-to-Speech API" and click on "ENABLE".
+5. In the API window, click on "Credentials" and then on "+ Create Credential".  
+6. In the "Add credentials to your project" window, in step-1 under "Which API are you using?" drop down choose "Cloud Text-to-Speech API" and down below choose "No, I’m not using them". Then click on "What credentials do I need?"
+7. In step-2 give your service acount a name and on the right in the "Role" drop down choose Project-->Owner and under "Key Type" select "JSON" and click "Continue".  
+8. Copy the downloaded key and place it /home/pi/ directory **DO NOT RENAME**.   
+9. Enter the path to the Key along with the key name Eg: /home/pi/xxxx.json  in the config.yaml file in the "Google_Cloud_TTS_Credentials_Path" field.  
+
+************************************************
+### **CONTROL ASSISTANT/SEND PRESET COMMANDS USING IR REMOTE**     
+************************************************   
+1. Connect the IR Receiver according to the wiring diagram given below. The diagram given is for GPIO 17, if you are using another GPIO, please make the suitable changes to the connection.  
+
+<img src="https://drive.google.com/uc?id=1NXd0bvsoBNevY7oh9IeTRfBZ_MWla2Iy"
+width="600" height="400" border="1" />   
+
+2. Run the sample IR receiver script to get the codes for your desired buttons.  
+```   
+python /home/${USER}/GassistPi/Extras/IR-Sensor.py   
+```  
+3. In the **config.yaml** under IR, list your codes and corresponding queries/actions. The number of queries should match the number of codes listed.  
+4. If you want to execute the custom actions like Spotify, YouTube playback, Domoticz Control etc, prefix the word **custom**.  
+   Eg: "custom play god's plan from youtube"  
+       "custom Turn on __Domoticz device name__"   
+       "custom play all the songs from google music"  
+5. If you are sending a command to be processed by google assistant, there is no need to prefix **custom**.  
+   Eg: "what is the time"   
+       "what can you do for me"   
+
+Video for reference:  
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=LlbcjkRuQZk
+" target="_blank"><img src="http://img.youtube.com/vi/LlbcjkRuQZk/0.jpg"
+alt="Detailed Youtube Video" width="240" height="180" border="10" /></a>   
+
+************************************************
+### **SEND COMMANDS/QUERIES TO GOOGLE ASSISTANT OVER MQTT**     
+************************************************   
+1. Set up your desired MQTT broker. If you are setting up Raspberry Pi as a MQTT broker, follow the guide below.  
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=Ce2Djxx9shU
+" target="_blank"><img src="http://img.youtube.com/vi/Ce2Djxx9shU/0.jpg"
+alt="Detailed Youtube Video" width="240" height="180" border="10" /></a>   
+
+2. Enter the MQTT broker credentials and subscription topic in the provided config.yaml file.  
+3. Set the MQTT_Control to **Enabled**.  
+4. Now, you can send queries or commands to google assistant over MQTT.  
+5. If you are sending a command for custom actions, prefix **custom** in the payload.  
+   Eg: "custom play god's plan from youtube"  
+       "custom Turn on __Domoticz device name__"   
+       "custom play all the songs from google music"  
+6. If you are sending a command to be processed by google assistant, there is no need to prefix **custom**.  
+   Eg: "what is the time"   
+       "what can you do for me"      
+
+For more details on the how to use this feature, refer to the video below:   
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=oemsmrdhNP8
+" target="_blank"><img src="http://img.youtube.com/vi/oemsmrdhNP8/0.jpg"
+alt="Detailed Youtube Video" width="240" height="180" border="10" /></a>  
 
 ************************************************
 ### **MUSIC STREAMING FROM DEEZER**  
@@ -609,10 +700,10 @@ Music streaming has been enabled for both OK-Google and Custom hotwords/wakeword
 ************************************************
 The music streaming from Google Music uses [Gmusicapi](https://unofficial-google-music-api.readthedocs.io/en/latest/).
 
-Enter your Google userid and password in the **config.yaml** file. If you are using a two-step authentication or two-factor authentication, generate and use an app specific password.
-
-### Getting app specific password:
-Refer to this page on google help - https://support.google.com/accounts/answer/185833?hl=en
+Run the Google Music Authenticator once using:    
+```
+/home/${USER}/env/bin/python -u /home/${USER}/GassistPi/Extras/gmusicauth.py
+```
 
 ### What you can do:
 Play all your songs in loop using the syntax: **"Hey Google, Play all the songs from Google Music"**
@@ -682,7 +773,7 @@ The Kodi integration uses YouTube Data API v3  for getting video links. First st
 2. Select your project from the list.  
 3. On the left top corner, click on the hamburger icon or three horizontal stacked lines.  
 4. Move your mouse pointer over "API and services" and choose "credentials".
-5. Click on create credentials and select API Key and choose close. Make a note of the created API Key and enter it in the actions.py script at the indicated location.  
+5. Click on create credentials and select API Key and choose close. Make a note of the created API Key and enter it in the config.yaml at the indicated location.  
 6. "From the API and services" option, select library and in the search bar type youtube, select "YouTube Data API v3" API and click on "ENABLE".
 7. In the API window, click on "All API Credentials" and in the drop down, make sure to have a tick (check mark) against the API Key that you just generated.  
 
@@ -696,7 +787,6 @@ The webserver is disabled by default and has to be manually enabled by the user.
 For Kodi to play the YouTube video, you need to add and enable the YouTube Plugin on Kodi.  
 
 ### Command Sytanxes for Kodi Control  
-**Note that "on Kodi" should be used in all the commands. If you want to use it exclusively, for Kodi Control, replace the given main.py and assistants.py file with the ones provieded in the extras/Kodi Intergration/ folder. In that, "on kodi" has been programatically added and other functions have been disabled,even genral queries like time and weather will not work. It is to be used only for the following Kodi commands.**  
 
 | Command Syntax    | What it does                                        |
 |-------------------|------------------------------------------------|
@@ -788,6 +878,7 @@ For Kodi to play the YouTube video, you need to add and enable the YouTube Plugi
 | 05 and 06         | Google assistant listening and responding      |  
 | 22                | Pushbutton trigger for gRPC API. Connect a pushbutton between GPIO 22 and GRND for manually triggering                     |  
 | 12,13,24          | Voice control of devices connected to GPIO     |  
-| 27                | Voice control of servo                         |  
+| 27                | Voice control of servo                         |
+| 17                | IR Sensor for preset commands                         |     
 
 **Note: some HATS may use GPIOs 18, 19, 20, 21 for I2S audio please refer to the manufacturer's pinouts**          

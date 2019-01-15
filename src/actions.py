@@ -16,6 +16,7 @@ from youtube_search_engine import google_cloud_api_key
 from googletrans import Translator
 from youtube_search_engine import youtube_search
 from youtube_search_engine import youtube_stream_link
+from google.cloud import texttospeech
 from gtts import gTTS
 import requests
 import mediaplayer
@@ -39,30 +40,48 @@ import spotipy
 import pprint
 import yaml
 
-domoticz_devices=''
-Domoticz_Device_Control=False
-bright=''
-hexcolour=''
-
 ROOT_PATH = os.path.realpath(os.path.join(__file__, '..', '..'))
 USER_PATH = os.path.realpath(os.path.join(__file__, '..', '..','..'))
 
 with open('{}/src/config.yaml'.format(ROOT_PATH),'r') as conf:
     configuration = yaml.load(conf)
 
-if configuration['Language']['Choice']=='en':
+TTSChoice=''
+if configuration['TextToSpeech']['Choice']=="Google Cloud":
+    if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""):
+        if configuration['TextToSpeech']['Google_Cloud_TTS_Credentials_Path']!="ENTER THE PATH TO YOUR TTS CREDENTIALS FILE HERE":
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = configuration['TextToSpeech']['Google_Cloud_TTS_Credentials_Path']
+            TTSChoice='GoogleCloud'
+            # Instantiates a client
+            client = texttospeech.TextToSpeechClient()
+        else:
+            print("Set the path to your Google cloud text to speech credentials in the config.yaml file. Using gTTS for now.....")
+            TTSChoice='GTTS'
+    else:
+        TTSChoice='GoogleCloud'
+        # Instantiates a client
+        client = texttospeech.TextToSpeechClient()
+else:
+    TTSChoice='GTTS'
+
+domoticz_devices=''
+Domoticz_Device_Control=False
+bright=''
+hexcolour=''
+
+if 'en' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_en.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='it':
+elif 'it' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_it.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='fr':
+elif 'fr' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_fr.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='de':
+elif 'de' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_de.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='es':
+elif 'es' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_es.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='nl':
+elif 'nl' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_nl.yaml'.format(ROOT_PATH)
-elif configuration['Language']['Choice']=='sv':
+elif 'sv' in configuration['Language']['Choice']:
     keywordfile= '{}/src/keywords_sv.yaml'.format(ROOT_PATH)
 else:
     keywordfile= '{}/src/keywords_en.yaml'.format(ROOT_PATH)
@@ -83,11 +102,16 @@ if configuration['Domoticz']['Domoticz_Control']=='Enabled':
 else:
     Domoticz_Device_Control=False
 
-
+Spotify_credentials=False
+Youtube_credentials=False
+if configuration['Spotify']['client_id']!= 'ENTER YOUR SPOTIFY CLIENT ID HERE' and configuration['Spotify']['client_secret']!='ENTER YOUR SPOTIFY CLIENT SECRET HERE':
+    Spotify_credentials=True
+if configuration['Google_cloud_api_key']!='ENTER-YOUR-GOOGLE-CLOUD-API-KEY-HERE':
+    Youtube_credentials=True
 
 # Spotify Declarations
 # Register with spotify for a developer account to get client-id and client-secret
-if configuration['Spotify']['client_id']!= 'ENTER YOUR SPOTIFY CLIENT ID HERE' and configuration['Spotify']['client_secret']!='ENTER YOUR SPOTIFY CLIENT SECRET HERE':
+if Spotify_credentials:
     client_id = configuration['Spotify']['client_id']
     client_secret = configuration['Spotify']['client_secret']
     username=configuration['Spotify']['username']
@@ -192,16 +216,19 @@ quote = "http://feeds.feedburner.com/brainyquote/QUOTEBR"
 translator = Translator()
 femalettsfilename="/tmp/female-say.mp3"
 malettsfilename="/tmp/male-say.wav"
+ttsfilename="/tmp/gcloud.mp3"
 language=configuration['Language']['Choice']
+translanguage=language.split('-')[0]
 gender=''
-if configuration['Voice_Custom_Actions']=='Male' and language=='en':
+if configuration['TextToSpeech']['Voice_Gender']=='Male' and translanguage=='en':
     gender='Male'
-elif language=='it':
+elif translanguage=='it':
     gender='Male'
-elif configuration['Voice_Custom_Actions']=='Male' and language!='en':
+elif configuration['TextToSpeech']['Voice_Gender']=='Male' and translanguage!='en':
     gender='Female'
 else:
     gender='Female'
+
 
 #Function for google KS custom search engine
 def kickstrater_search(query):
@@ -224,19 +251,9 @@ def gaana_search(query):
         ).execute()
     return res
 
-#Word translator
-def trans(words,lang):
-    transword= translator.translate(words, dest=lang)
-    transword=transword.text
-    transword=transword.replace("Text, ",'',1)
-    transword=transword.strip()
-    print(transword)
-    return transword
-
-#Text to speech converter with translation
-def say(words):
-    newword=trans(words,language)
-    tts = gTTS(text=newword, lang=language)
+#gTTS
+def gttssay(phrase,saylang):
+    tts = gTTS(text=phrase, lang=saylang)
     tts.save(femalettsfilename)
     if gender=='Male':
         os.system('sox ' + femalettsfilename + ' ' + malettsfilename + ' pitch -450')
@@ -247,12 +264,67 @@ def say(words):
         os.system("mpg123 "+femalettsfilename)
         os.remove(femalettsfilename)
 
+#Google Cloud Text to Speech
+def gcloudsay(phrase,lang):
+    try:
+        if gender=='Male':
+            gcloudgender=texttospeech.enums.SsmlVoiceGender.MALE
+        else:
+            gcloudgender=texttospeech.enums.SsmlVoiceGender.FEMALE
+
+        synthesis_input = texttospeech.types.SynthesisInput(text=phrase)
+        voice = texttospeech.types.VoiceSelectionParams(
+            language_code=lang,
+            ssml_gender=gcloudgender)
+        audio_config = texttospeech.types.AudioConfig(
+            audio_encoding=texttospeech.enums.AudioEncoding.MP3)
+        response = client.synthesize_speech(synthesis_input, voice, audio_config)
+        with open(ttsfilename, 'wb') as out:
+            out.write(response.audio_content)
+        if gender=='Male' and lang=='it-IT':
+            os.system('sox ' + ttsfilename + ' ' + malettsfilename + ' pitch -450')
+            os.remove(ttsfilename)
+            os.system('aplay ' + malettsfilename)
+            os.remove(malettsfilename)
+        else:
+            os.system("mpg123 "+ttsfilename)
+            os.remove(ttsfilename)
+    except google.api_core.exceptions.ResourceExhausted:
+        print("Google cloud text to speech quota exhausted. Using GTTS. Make sure to change the choice in config.yaml")
+        gttssay(phrase,lang)
+
+#Word translator
+def trans(words,destlang,srclang):
+    transword= translator.translate(words, dest=destlang, src=srclang)
+    transword=transword.text
+    transword=transword.replace("Text, ",'',1)
+    transword=transword.strip()
+    print(transword)
+    return transword
+
+#Text to speech converter with translation
+def say(words,sourcelang=None):
+    if sourcelang==None:
+        sourcelanguage='en'
+    else:
+        sourcelanguage=sourcelang
+    if sourcelanguage!=translanguage:
+        sayword=trans(words,translanguage,sourcelanguage)
+    else:
+        sayword=words
+    if TTSChoice=='GoogleCloud':
+        gcloudsay(sayword,language)
+    elif TTSChoice=='GTTS':
+        gttssay(sayword,translanguage)
+
+
 #Function to get HEX and RGB values for requested colour
 def getcolours(phrase):
     usrclridx=idx=phrase.find(custom_action_keyword['Dict']['To'])
     usrclr=query=phrase[usrclridx:]
     usrclr=usrclr.replace(custom_action_keyword['Dict']['To'],"",1)
-    usrclr=usrclr.replace("'}","",1)
+    usrclr=usrclr.replace("'","",1)
+    usrclr=usrclr.replace("}","",1)
     usrclr=usrclr.strip()
     usrclr=usrclr.replace(" ","",1)
     usrclr=usrclr.lower()
@@ -551,7 +623,8 @@ def singleplaykodi(query):
     i=0
     idx=query.find(custom_action_keyword['Dict']['Play'])
     track=query[idx:]
-    track=track.replace("'}", "",1)
+    track=track.replace("}", "",1)
+    track=track.replace("'", "",1)
     track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
     track = track.replace((custom_action_keyword['Keywords']['Kodi_actions'][0]),'',1)
     track=track.strip()
@@ -686,7 +759,8 @@ def kodiactions(phrase):
         query=str(phrase).lower()
         idx=query.find(custom_action_keyword['Dict']['Play'])
         track=query[idx:]
-        track=track.replace("'}", "",1)
+        track=track.replace("}", "",1)
+        track=track.replace("'", "",1)
         track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
         track = track.replace((custom_action_keyword['Keywords']['Kodi_actions'][0]),'',1)
         if 'youtube'.lower() in track:
@@ -706,7 +780,8 @@ def kodiactions(phrase):
         query=str(phrase).lower()
         idx = query.find(custom_action_keyword['Dict']['Artist'])
         artist = query[idx:]
-        artist = artist.replace("'}", "",1)
+        artist = artist.replace("'", "",1)
+        artist = artist.replace("}", "",1)
         artist = artist.replace(custom_action_keyword['Dict']['Artist'],'',1)
         artist = artist.replace((custom_action_keyword['Keywords']['Kodi_actions'][0]),'',1)
         artist = artist.strip()
@@ -962,15 +1037,11 @@ def gmusicselect(phrase):
 
     if (custom_action_keyword['Dict']['Album']).lower() in phrase:
         req=phrase
-        idx=(req).find(custom_action_keyword['Dict']['Album'])
-        album=req[idx:]
-        album=album.replace("'}", "",1)
+        idx1=req.find(custom_action_keyword['Dict']['Album'])
+        idx2=req.find(custom_action_keyword['Dict']['From_google_music'])
+        album=req[idx1:idx2]
         album = album.replace(custom_action_keyword['Dict']['Album'],'',1)
-        if (custom_action_keyword['Dict']['From']).lower() in req:
-            album = album.replace(custom_action_keyword['Dict']['From'],'',1)
-            album = album.replace((custom_action_keyword['Keywords']['Google_music_streaming'][0]),'',1)
-        else:
-            album = album.replace((custom_action_keyword['Keywords']['Google_music_streaming'][0]),'',1)
+        album = album.replace(custom_action_keyword['Dict']['From_google_music'],'',1)
         album=album.strip()
         print(album)
         say("Looking for songs from the album")
@@ -983,15 +1054,11 @@ def gmusicselect(phrase):
 
     if (custom_action_keyword['Dict']['Artist']).lower() in phrase:
         req=phrase
-        idx=(req).find(custom_action_keyword['Dict']['Artist'])
-        artist=req[idx:]
-        artist=artist.replace("'}", "",1)
+        idx1=req.find(custom_action_keyword['Dict']['Artist'])
+        idx2=req.find(custom_action_keyword['Dict']['From_google_music'])
+        artist=req[idx1:idx2]
         artist = artist.replace(custom_action_keyword['Dict']['Artist'],'',1)
-        if (custom_action_keyword['Dict']['From']).lower() in req:
-            artist = artist.replace(custom_action_keyword['Dict']['From'],'',1)
-            artist = artist.replace((custom_action_keyword['Keywords']['Google_music_streaming'][0]),'',1)
-        else:
-            artist = artist.replace((custom_action_keyword['Keywords']['Google_music_streaming'][0]),'',1)
+        artist = artist.replace(custom_action_keyword['Dict']['From_google_music'],'',1)
         artist=artist.strip()
         print(artist)
         say("Looking for songs rendered by the artist")
@@ -1012,9 +1079,9 @@ def YouTube_Autoplay(phrase):
     try:
         urllist=[]
         currenttrackid=0
-        idx=phrase.find('autoplay')
-        track=phrase[idx:]
-        track=track.replace("'}", "",1)
+        idx1=phrase.find('autoplay')
+        idx2=phrase.find(custom_action_keyword['Dict']['From_youtube'])
+        track=phrase[idx1:idx2]
         track = track.replace('autoplay','',1)
         track = track.replace(custom_action_keyword['Dict']['From_youtube'],'',1)
         track=track.strip()
@@ -1039,9 +1106,9 @@ def YouTube_No_Autoplay(phrase):
     try:
         urllist=[]
         currenttrackid=0
-        idx=phrase.find(custom_action_keyword['Dict']['Play'])
-        track=phrase[idx:]
-        track=track.replace("'}", "",1)
+        idx1=phrase.find(custom_action_keyword['Dict']['Play'])
+        idx2=phrase.find(custom_action_keyword['Dict']['From_youtube'])
+        track=phrase[idx1:idx2]
         track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
         track = track.replace(custom_action_keyword['Dict']['From_youtube'],'',1)
         track=track.strip()
@@ -1071,9 +1138,9 @@ def chromecast_play_video(phrase):
     # Do not rename/change "TV" its a variable
     TV = pychromecast.Chromecast("192.168.1.13") #Change ip to match the ip-address of your Chromecast
     mc = TV.media_controller
-    idx=phrase.find(custom_action_keyword['Dict']['Play'])
-    query=phrase[idx:]
-    query=query.replace("'}", "",1)
+    idx1=phrase.find(custom_action_keyword['Dict']['Play'])
+    idx2=phrase.find('on chromecast')
+    query=phrase[idx1:idx2]
     query=query.replace(custom_action_keyword['Dict']['Play'],'',1)
     query=query.replace('on chromecast','',1)
     query=query.strip()
@@ -1367,9 +1434,9 @@ def scan_spotify_playlists():
 def spotify_playlist_select(phrase):
     trackslist=[]
     currenttrackid=0
-    idx=phrase.find(custom_action_keyword['Dict']['Play'])
-    track=phrase[idx:]
-    track=track.replace("'}", "",1)
+    idx1=phrase.find(custom_action_keyword['Dict']['Play'])
+    idx2=phrase.find(custom_action_keyword['Dict']['From_spotify'])
+    track=phrase[idx1:idx2]
     track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
     track = track.replace(custom_action_keyword['Dict']['From_spotify'],'',1)
     track=track.strip()
@@ -1401,13 +1468,13 @@ def domoticz_control(query,index,devicename):
 
         if (' ' + custom_action_keyword['Dict']['On'] + ' ') in query or (' ' + custom_action_keyword['Dict']['On']) in query or (custom_action_keyword['Dict']['On'] + ' ') in query:
             devreq=requests.head("https://" + configuration['Domoticz']['Server_IP'][0] + ":" + configuration['Domoticz']['Server_port'][0] + "/json.htm?type=command&param=switchlight&idx=" + index + "&switchcmd=On",verify=False)
-            say('Turning on ' + devicename + ' .')
+            say('Turning on ' + devicename )
         if custom_action_keyword['Dict']['Off'] in query:
             devreq=requests.head("https://" + configuration['Domoticz']['Server_IP'][0] + ":" + configuration['Domoticz']['Server_port'][0] + "/json.htm?type=command&param=switchlight&idx=" + index + "&switchcmd=Off",verify=False)
-            say('Turning off ' + devicename + ' .')
+            say('Turning off ' + devicename )
         if 'toggle' in query:
             devreq=requests.head("https://" + configuration['Domoticz']['Server_IP'][0] + ":" + configuration['Domoticz']['Server_port'][0] + "/json.htm?type=command&param=switchlight&idx=" + index + "&switchcmd=Toggle",verify=False)
-            say('Toggling ' + devicename + ' .')
+            say('Toggling ' + devicename )
         if custom_action_keyword['Dict']['Colour'] in query:
             if 'RGB' in domoticz_devices['result'][devorder]['SubType']:
                 rcolour,gcolour,bcolour,hexcolour,colour=getcolours(query)
@@ -1417,7 +1484,7 @@ def domoticz_control(query,index,devicename):
                 if bright=='':
                     bright=str(domoticz_devices['result'][devorder]['Level'])
                 devreq=requests.head("https://" + configuration['Domoticz']['Server_IP'][0] + ":" + configuration['Domoticz']['Server_port'][0] + "/json.htm?type=command&param=setcolbrightnessvalue&idx=" + index + "&hex=" + hexcolour + "&brightness=" + bright + "&iswhite=false",verify=False)
-                say('Setting ' + devicename + ' to ' + colour + ' .')
+                say('Setting ' + devicename + ' to ' + colour )
             else:
                 say('The requested light is not a colour bulb')
         if custom_action_keyword['Dict']['Brightness'] in query:
@@ -1471,9 +1538,9 @@ def getgaanaplaylistinfo(playlisturl):
 def gaana_playlist_select(phrase):
     trackslist=[]
     currenttrackid=0
-    idx=phrase.find(custom_action_keyword['Dict']['Play'])
-    track=phrase[idx:]
-    track=track.replace("'}", "",1)
+    idx1=phrase.find(custom_action_keyword['Dict']['Play'])
+    idx2=phrase.find(custom_action_keyword['Dict']['From_gaana'])
+    track=phrase[idx1:idx2]
     track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
     track = track.replace(custom_action_keyword['Dict']['From_gaana'],'',1)
     track=track.strip()
@@ -1510,9 +1577,9 @@ def deezer_playlist_select(phrase):
     trackslist=[]
     deezer_user_playlists=[]
     currenttrackid=0
-    idx=phrase.find(custom_action_keyword['Dict']['Play'])
-    track=phrase[idx:]
-    track=track.replace("'}", "",1)
+    idx1=phrase.find(custom_action_keyword['Dict']['Play'])
+    idx2=phrase.find(custom_action_keyword['Dict']['From_deezer'])
+    track=phrase[idx1:idx2]
     track = track.replace(custom_action_keyword['Dict']['Play'],'',1)
     track = track.replace(custom_action_keyword['Dict']['From_deezer'],'',1)
     track=track.strip()
@@ -1547,6 +1614,43 @@ def deezer_playlist_select(phrase):
         say("Unable to find matching tracks")
 
 #------------------------End of Deezer Functions-------------------------------
+
+#-----------------------Start of functions for IR code--------------------------
+
+def binary_aquire(pin, duration):
+    t0 = time.time()
+    results = []
+    while (time.time() - t0) < duration:
+        results.append(GPIO.input(pin))
+    return results
+
+def on_ir_receive(pinNo, bouncetime=150):
+    data = binary_aquire(pinNo, bouncetime/1000.0)
+    if len(data) < bouncetime:
+        return
+    rate = len(data) / (bouncetime / 1000.0)
+    pulses = []
+    i_break = 0
+    for i in range(1, len(data)):
+        if (data[i] != data[i-1]) or (i == len(data)-1):
+            pulses.append((data[i-1], int((i-i_break)/rate*1e6)))
+            i_break = i
+    outbin = ""
+    for val, us in pulses:
+        if val != 1:
+            continue
+        if outbin and us > 2000:
+            break
+        elif us < 1000:
+            outbin += "0"
+        elif 1000 < us < 2000:
+            outbin += "1"
+    try:
+        return int(outbin, 2)
+    except ValueError:
+        return None
+
+#-----------------------End of functions for IR code--------------------------
 
 #GPIO Device Control
 def Action(phrase):
